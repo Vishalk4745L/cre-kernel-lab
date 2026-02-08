@@ -1,0 +1,39 @@
+# ======================
+# Python
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ======================
+# Virtual Environments
+# ======================
+.venv/
+venv/
+
+# ======================
+# IDE / Editor
+# ======================
+.vscode/
+.idea/
+
+# ======================
+# OS files
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# Logs
+# ======================
+*.log
+audit_log.jsonl
+
+# ======================
+# Local Data / SQLite
+# (Kernel must stay stateless in repo)
+# ======================
+*.db
+kernel/data/
+data/

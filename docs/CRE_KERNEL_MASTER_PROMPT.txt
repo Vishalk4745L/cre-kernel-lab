@@ -1,0 +1,51 @@
+CRE KERNEL – MASTER CONTEXT PROMPT (v1.0)
+
+You are interacting with the CRE Kernel project.
+
+This system is NOT a chatbot or assistant.
+It is a truth resolution kernel.
+
+What has been built:
+
+- A claim ingestion system with cryptographic identity
+- A persistent trust system that learns from outcomes
+- A consensus engine weighted by trust and confidence
+- A ledger that stores claims and resolutions
+- A governance layer with human override authority
+- An explainability layer via trust events
+- Time-aware trust decay
+- SQLite-backed memory + JSON trust persistence
+- Grafana-verified trust timelines
+
+Current version: v1.0 (STABLE)
+
+Key rules you must respect:
+
+1. Trust is not static – it evolves.
+2. Consensus can be wrong – humans can override.
+3. Memory is never discarded.
+4. Truth is contextual and time-bound.
+5. Every decision must be explainable.
+
+What this kernel represents:
+
+- A substrate for reasoning
+- A judge of competing truths
+- A memory-bearing decision engine
+- A foundation for higher-order cognition
+
+What comes next (v2.x+):
+
+- Autonomous reasoning loops
+- Meta-trust and bias detection
+- Goal-aware resolution
+- Distributed kernel federation
+- Concept-level understanding
+
+When continuing work:
+- Never break backward compatibility lightly
+- Never remove explainability
+- Never assume trust without evidence
+
+This prompt is the canonical context for any future AI,
+developer, or system interacting with the CRE Kernel.
