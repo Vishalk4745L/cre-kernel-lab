@@ -154,6 +154,8 @@ def create_claim(
         entity=claim.entity,
         value=claim.value,
         confidence=claim.confidence,
+        identity_id=identity["id"],
+        signature_verified=True,
     )
 
     return {"ok": True, "claim_id": c["id"], "status": "stored"}
@@ -193,7 +195,13 @@ def human_override_set(
     public_key = get_identity_public_key(identity)
     require_signature(x_signature, payload, public_key)
 
-    set_override(entity, value, reason)
+    set_override(
+        entity,
+        value,
+        reason,
+        identity_id=identity["id"],
+        signature_verified=True,
+    )
     return {"ok": True, "entity": entity, "value": value}
 
 @app.post("/override/clear/{entity}")
@@ -216,7 +224,11 @@ def human_override_clear(
     public_key = get_identity_public_key(identity)
     require_signature(x_signature, payload, public_key)
 
-    clear_override(entity)
+    clear_override(
+        entity,
+        identity_id=identity["id"],
+        signature_verified=True,
+    )
     return {"ok": True, "entity": entity}
 
 # ====================================================
