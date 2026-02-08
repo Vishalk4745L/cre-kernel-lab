@@ -1,9 +1,9 @@
 """
-CRE Kernel – Signature Verification (v0.8 DEV MODE)
+CRE Kernel – Signature Verification (v0.8 STABLE)
 
 Purpose:
 - Verify Ed25519 signatures
-- Allow DEV MODE bypass for fast local testing
+- Enforce strict authentication
 """
 
 from fastapi import HTTPException
@@ -14,8 +14,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 # =================================================
 # DEV MODE FLAG
 # =================================================
-# Set to "true" to bypass signature verification
-DEV_MODE = True   # 🔴 CHANGE TO False IN PROD
+# Set to "False" to enforce signature verification
+DEV_MODE = False   # 🔴 CHANGED TO False FOR PROD
 
 # =================================================
 # Signature Verification

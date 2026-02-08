@@ -7,7 +7,7 @@ from kernel.core.audit import log_event
 HUMAN_OVERRIDES = {}
 
 
-def set_override(entity, value, reason="manual override"):
+def set_override(entity, value, reason="manual override", identity_id=None, signature_verified=False):
     """
     Highest-authority human override.
     This ALWAYS wins over kernel resolution.
@@ -21,19 +21,20 @@ def set_override(entity, value, reason="manual override"):
     }
 
     # audit log
-    log_event(
-        actor="HUMAN_ADMIN",
-        action="SET_OVERRIDE",
-        entity=entity,
-        previous_state=previous,
-        new_state=HUMAN_OVERRIDES[entity],
-        reason=reason
-    )
+    log_event("SET_OVERRIDE", {
+        "actor": "HUMAN_ADMIN",
+        "entity": entity,
+        "previous_state": previous,
+        "new_state": HUMAN_OVERRIDES[entity],
+        "reason": reason,
+        "identity_id": identity_id,
+        "signature_verified": signature_verified
+    })
 
     return HUMAN_OVERRIDES[entity]
 
 
-def clear_override(entity, reason="manual clear"):
+def clear_override(entity, reason="manual clear", identity_id=None, signature_verified=False):
     """
     Remove human override (also audited).
     """
@@ -43,14 +44,15 @@ def clear_override(entity, reason="manual clear"):
     if entity in HUMAN_OVERRIDES:
         del HUMAN_OVERRIDES[entity]
 
-        log_event(
-            actor="HUMAN_ADMIN",
-            action="CLEAR_OVERRIDE",
-            entity=entity,
-            previous_state=previous,
-            new_state=None,
-            reason=reason
-        )
+        log_event("CLEAR_OVERRIDE", {
+            "actor": "HUMAN_ADMIN",
+            "entity": entity,
+            "previous_state": previous,
+            "new_state": None,
+            "reason": reason,
+            "identity_id": identity_id,
+            "signature_verified": signature_verified
+        })
 
         return True
 

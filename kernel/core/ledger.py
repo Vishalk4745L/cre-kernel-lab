@@ -11,7 +11,7 @@ Responsibilities:
 """
 
 import time
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from kernel.core.audit import log_event
 from kernel.core.governance import check_override
@@ -33,6 +33,8 @@ def add_claim(
     entity: str,
     value: str,
     confidence: float,
+    identity_id: Optional[str] = None,
+    signature_verified: bool = False,
 ) -> Dict:
     """
     Store a new claim into SQLite with live trust snapshot.
@@ -63,6 +65,8 @@ def add_claim(
         "confidence": float(confidence),
         "trust": trust,
         "timestamp": ts,
+        "identity_id": identity_id,
+        "signature_verified": signature_verified,
     }
 
     log_event("CLAIM_ADDED", claim)
