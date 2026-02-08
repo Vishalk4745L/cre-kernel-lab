@@ -1,38 +1,26 @@
 # test_kernel.py
-# Simple test for CRE Kernel (Ledger + Resolver)
+# Simple test for CRE Kernel (Ledger + Consensus)
 
-from kernel.core.ledger import submit_claim
-from kernel.core.resolver import resolve_truth
-
-# Step 1: Agents (mock trust scores)
-AGENTS = {
-    "senior": 0.9,
-    "junior": 0.2
-}
+from kernel.core.ledger import add_claim, resolve_entity
 
 # Step 2: Senior writes truth
-submit_claim(
-    agent_id="senior",
+add_claim(
+    agent="senior",
     entity="DB_PORT",
-    attribute="value",
     value="5432",
-    confidence=1.0
+    confidence=1.0,
 )
 
 # Step 3: Junior hallucinates
-submit_claim(
-    agent_id="junior",
+add_claim(
+    agent="junior",
     entity="DB_PORT",
-    attribute="value",
     value="3306",
-    confidence=1.0
+    confidence=1.0,
 )
 
 # Step 4: Resolve truth
-result = resolve_truth(
-    entity="DB_PORT",
-    attribute="value"
-)
+result = resolve_entity("DB_PORT")
 
 print("RESOLVED RESULT:")
 print(result)

@@ -143,6 +143,23 @@ def init_db() -> None:
     )
     """)
 
+    # ------------------------------
+    # Error penalty events (audit)
+    # ------------------------------
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS error_penalty_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        error_type TEXT NOT NULL,
+        weight REAL NOT NULL,
+        confidence REAL NOT NULL,
+        final_penalty_strength REAL NOT NULL,
+        reason TEXT NOT NULL,
+        timestamp REAL NOT NULL
+    )
+    """)
+
     conn.commit()
     conn.close()
 

@@ -14,7 +14,7 @@ ALL adapters (Gemini / MCP / A2A / SDKs)
 must translate TO and FROM this format.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict
 import time
 
@@ -25,7 +25,7 @@ class KernelMessage:
     type: str              # thought | action | result | signal
     content: Any           # payload
     confidence: float      # 0.0 → 1.0
-    timestamp: float = time.time()
+    timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

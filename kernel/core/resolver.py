@@ -1,93 +1,76 @@
-# kernel/core/ledger.py
+"""
+Resolver compatibility layer.
+
+Purpose:
+- Keep legacy resolve_truth helpers for test scripts
+- Normalize legacy claim shapes into consensus inputs
+- Delegate entity resolution to the SQLite-backed ledger
+
+This avoids duplicated logic while preserving historical entry points.
+"""
+
+from __future__ import annotations
+
 import time
-from kernel.core.governance import check_override
+from typing import Dict, Iterable, List, Mapping
 
-# in-memory ledger
-ledger = []
+from kernel.core.consensus import resolve_consensus
+from kernel.core.ledger import resolve_entity as resolve_entity_from_ledger
+from kernel.core.trust import DEFAULT_TRUST
 
-# Explicit agent trust (v0.2)
-AGENT_TRUST = {
-    "Senior": 0.9,
-    "Junior": 0.2
-}
-
-# how fast old claims decay
-DECAY_RATE = 0.0005   # safe & slow
-MARGIN = 0.15         # minimum margin to resolve
+# Legacy decay defaults (from v0.2 resolver)
+_DEFAULT_DECAY_RATE = 0.0005
+_MIN_DECAY_FACTOR = 0.1
 
 
-def add_claim(agent, entity, value, confidence):
-    claim = {
-        "id": len(ledger) + 1,
-        "agent": agent,
-        "entity": entity,
-        "value": value,
-        "confidence": float(confidence),
-        "trust": AGENT_TRUST.get(agent, 0.1),
-        "timestamp": time.time()
-    }
-    ledger.append(claim)
-    return claim
+def resolve_truth(
+    claims: Iterable[Mapping[str, object]],
+    trust_map: Mapping[str, float],
+    *,
+    decay_rate: float = _DEFAULT_DECAY_RATE,
+) -> Dict[str, object]:
+    """
+    Legacy resolver helper.
 
+    Accepts a list of claim-like dicts with keys:
+      - agent_id
+      - value
+      - confidence
+      - claimed_at (datetime or timestamp, optional)
 
-def resolve_entity(entity):
-    # 🔐 v0.3 — HUMAN OVERRIDE (highest authority)
-    override = check_override(entity)
-    if override:
-        return {
-            "entity": entity,
-            "value": override["value"],
-            "confidence": 1.0,
-            "status": "human_override",
-            "reason": override["reason"]
-        }
-
+    Returns a consensus resolution dict (same shape as resolve_consensus).
+    """
     now = time.time()
-    scores = {}
+    normalized: List[Dict[str, object]] = []
 
-    # aggregate weighted scores
-    for c in ledger:
-        if c["entity"] != entity:
-            continue
+    for claim in claims:
+        agent_id = str(claim.get("agent_id") or claim.get("agent") or "")
+        value = claim.get("value")
+        confidence = float(claim.get("confidence", 0.0))
+        claimed_at = claim.get("claimed_at")
 
-        age = now - c["timestamp"]
-        time_decay = max(0.1, 1 - age * DECAY_RATE)
+        if claimed_at is not None:
+            try:
+                timestamp = float(getattr(claimed_at, "timestamp", lambda: claimed_at)())
+                age = max(0.0, now - timestamp)
+                decay = max(_MIN_DECAY_FACTOR, 1 - age * decay_rate)
+                confidence *= decay
+            except (TypeError, ValueError):
+                pass
 
-        weight = c["confidence"] * c["trust"] * time_decay
-        scores[c["value"]] = scores.get(c["value"], 0) + weight
+        normalized.append(
+            {
+                "value": value,
+                "confidence": confidence,
+                "trust": float(trust_map.get(agent_id, DEFAULT_TRUST)),
+            }
+        )
 
-    # no claims
-    if not scores:
-        return {
-            "entity": entity,
-            "status": "unknown"
-        }
+    return resolve_consensus(normalized)
 
-    # sort values by score
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-    # only one value → resolve directly
-    if len(sorted_scores) == 1:
-        value, score = sorted_scores[0]
-        return {
-            "entity": entity,
-            "value": value,
-            "confidence": round(score, 2),
-            "status": "resolved"
-        }
-
-    # check consensus margin
-    (winner, top_score), (_, second_score) = sorted_scores[:2]
-
-    if (top_score - second_score) < MARGIN:
-        return {
-            "entity": entity,
-            "status": "locked"
-        }
-
-    return {
-        "entity": entity,
-        "value": winner,
-        "confidence": round(top_score, 2),
-        "status": "resolved"
-    }
+def resolve_entity(entity: str) -> Dict[str, object]:
+    """
+    Resolve an entity using the canonical SQLite-backed ledger.
+    """
+    return resolve_entity_from_ledger(entity)

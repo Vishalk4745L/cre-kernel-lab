@@ -18,6 +18,9 @@ Kernel ONLY:
 Future adapters plug in WITHOUT modifying this file.
 """
 
+from typing import Dict
+
+from kernel.core.adapter_interface import AgentAdapter
 from kernel.core.adapter_registry import AdapterRegistry
 
 
@@ -29,11 +32,11 @@ class Kernel:
     This file should change VERY RARELY.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Holds all registered adapters
         self.registry = AdapterRegistry()
 
-    def register_adapter(self, adapter):
+    def register_adapter(self, adapter: AgentAdapter) -> None:
         """
         Attach an adapter to the kernel.
 
@@ -46,7 +49,7 @@ class Kernel:
         """
         self.registry.register(adapter)
 
-    def route(self, adapter_id: str, message: dict):
+    def route(self, adapter_id: str, message: Dict) -> Dict:
         """
         Route a message to a specific adapter.
 

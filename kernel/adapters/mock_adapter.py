@@ -30,7 +30,7 @@ class MockAgentAdapter(AgentAdapter):
     adapter_id = "mock-agent"
     adapter_type = "agent"
 
-    def capabilities(self):
+    def capabilities(self) -> dict:
         """
         Describe what this agent can do.
         Kernel may use this in future for routing decisions.
