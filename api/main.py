@@ -35,6 +35,12 @@ from kernel.core.memory_db import get_connection
 
 kernel_instance = Kernel()
 
+# Always register mock-agent (required for CI + tests)
+try:
+    kernel_instance.register_adapter(MockAgentAdapter())
+except Exception:
+    pass
+
 # Ensure mock-agent always exists (for CI + tests)
 try:
     if not kernel_instance.registry.get("mock-agent"):
