@@ -1,13 +1,9 @@
 """SQLite-backed trust system with trust event logging."""
 
 import time
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from kernel.core.memory_db import db_get_all_trust, db_get_trust, db_set_trust, get_connection
-
-# =================================================
-# Trust Configuration
-# =================================================
 
 DEFAULT_TRUST = 0.1
 TRUST_FLOOR = 0.05
@@ -16,11 +12,24 @@ TRUST_CEILING = 1.0
 BASE_REWARD = 0.05
 BASE_PENALTY = 0.05
 
-# =================================================
-# Internal helpers
-# =================================================
+_trust_event_callback: Optional[Callable[[Dict], None]] = None
 
-def _log_trust_event(agent: str, change: float, reason: str, confidence: float) -> None:
+
+def set_trust_event_callback(callback: Optional[Callable[[Dict], None]]) -> None:
+    global _trust_event_callback
+    _trust_event_callback = callback
+
+
+def _emit_trust_event(event: Dict) -> None:
+    if _trust_event_callback is not None:
+        try:
+            _trust_event_callback(event)
+        except Exception:
+            return
+
+
+def _log_trust_event(agent: str, change: float, reason: str, confidence: float, trust: float) -> None:
+    ts = time.time()
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
@@ -28,15 +37,20 @@ def _log_trust_event(agent: str, change: float, reason: str, confidence: float) 
         INSERT INTO trust_events (agent, change, reason, confidence, timestamp)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (agent, float(change), reason, float(confidence), time.time()),
+        (agent, float(change), reason, float(confidence), ts),
     )
     conn.commit()
     conn.close()
+    _emit_trust_event(
+        {
+            "agent": agent,
+            "trust": round(trust, 4),
+            "change": round(float(change), 4),
+            "reason": reason,
+            "timestamp": ts,
+        }
+    )
 
-
-# =================================================
-# Public API (READ)
-# =================================================
 
 def get_trust(agent: str) -> float:
     trust = db_get_trust(agent)
@@ -47,10 +61,6 @@ def get_all_trust() -> Dict[str, float]:
     return db_get_all_trust()
 
 
-# =================================================
-# Learning Rules (WRITE)
-# =================================================
-
 def reward_agent(agent: str, confidence: Optional[float] = None, reason: str = "reward") -> None:
     old = get_trust(agent)
     conf = confidence if confidence is not None else 1.0
@@ -60,7 +70,7 @@ def reward_agent(agent: str, confidence: Optional[float] = None, reason: str = "
     new = min(old + delta, TRUST_CEILING)
     rounded_new = round(new, 4)
     db_set_trust(agent, rounded_new)
-    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf)
+    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf, trust=rounded_new)
 
 
 def penalize_agent(agent: str, confidence: Optional[float] = None, reason: str = "penalty") -> None:
@@ -72,34 +82,19 @@ def penalize_agent(agent: str, confidence: Optional[float] = None, reason: str =
     new = max(old - delta, TRUST_FLOOR)
     rounded_new = round(new, 4)
     db_set_trust(agent, rounded_new)
-    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf)
+    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf, trust=rounded_new)
 
-
-# =================================================
-# Compatibility Layer (DO NOT REMOVE)
-# =================================================
 
 def update_trust(
     agent: str,
     correct: bool,
     confidence: Optional[float] = None,
 ) -> None:
-    """
-    Backward-compatible API for ledger (v0.9 / v0.10).
-    """
     if correct:
         reward_agent(agent, confidence, reason="consensus_correct")
     else:
         penalize_agent(agent, confidence, reason="consensus_incorrect")
 
 
-# =================================================
-# Future hook (safe stub)
-# =================================================
-
 def decay_all_agents() -> None:
-    """
-    v0.11 stub.
-    Time-based decay will be implemented in v0.12+.
-    """
     return
