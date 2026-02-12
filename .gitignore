@@ -51,6 +51,14 @@ data/
 *.secret
 
 # ======================
+# Frontend (React / Vite)
+# ======================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ======================
 # OpenClaw local runtime
 # ======================
 .openclaw/
+
