@@ -12,13 +12,14 @@ Responsibilities:
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 # --- Kernel Adapter System ---
 from kernel.core.kernel import Kernel
 from kernel.adapters.mock_adapter import MockAgentAdapter
 from kernel.core.message import KernelMessage
 import json
 import asyncio
+import time
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -118,6 +119,19 @@ async def start_background_tasks():
 def root_status(x_intent: Optional[str] = Header(None)):
     require_intent(INTENT_READ, x_intent)
     return {"status": "CRE kernel alive"}
+
+
+@app.get("/kernel/status")
+def kernel_status(x_intent: Optional[str] = Header(None)):
+    require_intent(INTENT_READ, x_intent)
+    adapters = kernel_instance.registry.list()
+    return {
+        "status": "CRE kernel alive",
+        "version": app.version,
+        "adapters_registered": len(adapters),
+        "adapters": adapters,
+        "timestamp": time.time(),
+    }
 
 # ====================================================
 # Claim API
@@ -252,33 +266,42 @@ def read_agent_trust(agent: str, x_intent: Optional[str] = Header(None)):
 @app.get("/trust/events")
 def read_trust_events(
     limit: int = 50,
+    offset: int = 0,
     x_intent: Optional[str] = Header(None),
 ):
     require_intent(INTENT_READ, x_intent)
 
     conn = get_connection()
     cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS total FROM trust_events")
+    total = cur.fetchone()["total"]
     cur.execute(
         """
         SELECT agent, change, reason, timestamp
         FROM trust_events
         ORDER BY timestamp DESC
         LIMIT ?
+        OFFSET ?
         """,
-        (limit,),
+        (limit, offset),
     )
     rows = cur.fetchall()
     conn.close()
 
-    return [
-        {
-            "agent": r["agent"],
-            "change": r["change"],
-            "reason": r["reason"],
-            "timestamp": r["timestamp"],
-        }
-        for r in rows
-    ]
+    return {
+        "items": [
+            {
+                "agent": r["agent"],
+                "change": r["change"],
+                "reason": r["reason"],
+                "timestamp": r["timestamp"],
+            }
+            for r in rows
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 # ====================================================
 # Trust Timeline (ABSOLUTE GRAPH)
@@ -357,3 +380,67 @@ def kernel_route_test(payload: dict):
 
     result = kernel_instance.route(adapter_id, msg.to_dict())
     return result
+
+
+@app.get("/kernel/adapters")
+def kernel_adapters(x_intent: Optional[str] = Header(None)):
+    require_intent(INTENT_READ, x_intent)
+    items: List[Dict[str, Any]] = []
+
+    for adapter_id in kernel_instance.registry.list():
+        adapter = kernel_instance.registry.get(adapter_id)
+        if not adapter:
+            continue
+        items.append(
+            {
+                "adapter_id": adapter_id,
+                "adapter_type": getattr(adapter, "adapter_type", "unknown"),
+                "capabilities": adapter.capabilities(),
+                "health": adapter.health(),
+            }
+        )
+
+    return items
+
+
+@app.get("/audit/error-reviews")
+def audit_error_reviews(
+    limit: int = 50,
+    offset: int = 0,
+    x_intent: Optional[str] = Header(None),
+):
+    require_intent(INTENT_READ, x_intent)
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) AS total FROM error_reviews")
+    total = cur.fetchone()["total"]
+
+    cur.execute(
+        """
+        SELECT
+            id,
+            reviewer_agent,
+            target_agent,
+            entity,
+            observed_value,
+            expected_value,
+            error_type,
+            confidence,
+            evidence,
+            timestamp
+        FROM error_reviews
+        ORDER BY timestamp DESC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    return {
+        "items": [dict(r) for r in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
