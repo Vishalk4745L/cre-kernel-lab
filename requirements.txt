@@ -1,5 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+cryptography
 pytest
 httpx
+websockets
