@@ -1,14 +1,6 @@
 """
-CRE Kernel API – v1.0 (STABLE)
-Frontend Compatible Version
-Responsibilities:
-Accept signed claims from agents
-Resolve entities using ledger + consensus
-Expose trust scores & trust event history
-Apply background time-based trust decay
-Allow -authorized human overrides
-Provide graph-ready absolute trust
-timelines
+CRE Kernel API – v1.0 (FRONTEND SAFE BUILD)
+Fully aligned with React Control Panel
 """
 
 # ============================================================
@@ -18,23 +10,21 @@ timelines
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, List, Any
-import json
+from typing import Optional
 import asyncio
 import time
-
-from cryptography.hazmat.primitives.asymmetric import ed25519
 
 # --- Kernel System ---
 from kernel.core.kernel import Kernel
 from kernel.adapters.mock_adapter import MockAgentAdapter
 from kernel.core.message import KernelMessage
-
 from kernel.core.ledger import add_claim, resolve_entity
-from kernel.core.governance import set_override, clear_override
-from kernel.core.identity import require_identity, get_identity_public_key
-from kernel.core.signature import require_signature
-from kernel.core.trust import get_trust, get_all_trust, decay_all_agents, reward_agent
+from kernel.core.trust import (
+    get_trust,
+    get_all_trust,
+    decay_all_agents,
+    reward_agent,
+)
 from kernel.core.error_review import record_error_review
 from kernel.core.memory_db import get_connection
 
@@ -46,7 +36,7 @@ kernel_instance = Kernel()
 kernel_instance.register_adapter(MockAgentAdapter())
 
 # ============================================================
-# FastAPI App
+# FastAPI Setup
 # ============================================================
 
 app = FastAPI(title="CRE Kernel API", version="1.0")
@@ -59,15 +49,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================
-# Constants
-# ============================================================
-
 INTENT_READ = "READ"
 INTENT_WRITE = "WRITE"
-
-IDENTITY_AGENT = "AGENT"
-IDENTITY_HUMAN_ADMIN = "HUMAN_ADMIN"
 
 trust_decay_lock = asyncio.Lock()
 
@@ -75,22 +58,53 @@ trust_decay_lock = asyncio.Lock()
 # Models
 # ============================================================
 
-class Claim(BaseModel):
-    agent: str
-    entity: str
-    value: str
-    confidence: float
+class KernelRouteRequest(BaseModel):
+    adapter_id: str
+    content: str
+
 
 # ============================================================
-# Helpers
+# Intent Guard
 # ============================================================
 
-def require_intent(expected: str, intent: Optional[str]) -> None:
+def require_intent(expected: str, intent: Optional[str]):
     if intent != expected:
         raise HTTPException(
             status_code=403,
             detail=f"Invalid intent. Expected '{expected}'"
         )
+
+# ============================================================
+# Startup (ensure tables exist)
+# ============================================================
+
+@app.on_event("startup")
+async def startup():
+
+    # Ensure error_reviews table exists
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS error_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reviewer_agent TEXT,
+            target_agent TEXT,
+            entity TEXT,
+            observed_value TEXT,
+            expected_value TEXT,
+            error_type TEXT,
+            confidence REAL,
+            evidence TEXT,
+            timestamp REAL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+    asyncio.create_task(trust_decay_loop())
+
 
 # ============================================================
 # Background Trust Decay
@@ -106,30 +120,6 @@ async def trust_decay_loop():
             except Exception as e:
                 print("Trust decay error:", e)
 
-@app.on_event("startup")
-async def startup():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS error_reviews (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            reviewer_agent TEXT,
-            target_agent TEXT,
-            entity TEXT,
-            observed_value TEXT,
-            expected_value TEXT,
-            error_type TEXT,
-            confidence REAL,
-            evidence TEXT,
-            timestamp REAL
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
-    asyncio.create_task(trust_decay_loop())
-
 # ============================================================
 # Health
 # ============================================================
@@ -137,7 +127,8 @@ async def startup():
 @app.get("/")
 def root_status(x_intent: Optional[str] = Header(None)):
     require_intent(INTENT_READ, x_intent)
-    return {"status": "CRE kernel alive"}
+    return {"ok": True, "data": {"status": "CRE kernel alive"}}
+
 
 @app.get("/kernel/status")
 def kernel_status(x_intent: Optional[str] = Header(None)):
@@ -146,47 +137,14 @@ def kernel_status(x_intent: Optional[str] = Header(None)):
     adapters = kernel_instance.registry.list()
 
     return {
-        "status": "CRE kernel alive",
-        "version": app.version,
-        "adapters_registered": len(adapters),
-        "adapters": adapters,
-        "timestamp": time.time(),
+        "ok": True,
+        "data": {
+            "status": "CRE kernel alive",
+            "version": app.version,
+            "adapters_registered": len(adapters),
+            "timestamp": time.time(),
+        },
     }
-
-# ============================================================
-# Claims
-# ============================================================
-
-@app.post("/claim")
-def create_claim(
-    claim: Claim,
-    x_intent: Optional[str] = Header(None),
-    x_identity_id: Optional[str] = Header(None),
-    x_signature: Optional[str] = Header(None),
-):
-    require_intent(INTENT_WRITE, x_intent)
-
-    identity = require_identity(x_identity_id, IDENTITY_AGENT)
-
-    payload = json.dumps(
-        claim.dict(),
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-    public_key: ed25519.Ed25519PublicKey = get_identity_public_key(identity)
-    require_signature(x_signature, payload, public_key)
-
-    c = add_claim(
-        agent=claim.agent,
-        entity=claim.entity,
-        value=claim.value,
-        confidence=claim.confidence,
-        identity_id=identity["id"],
-        signature_verified=True,
-    )
-
-    return {"claim_id": c["id"]}
 
 # ============================================================
 # Resolution
@@ -195,7 +153,7 @@ def create_claim(
 @app.get("/resolve/{entity}")
 def resolve_entity_api(entity: str, x_intent: Optional[str] = Header(None)):
     require_intent(INTENT_READ, x_intent)
-    return resolve_entity(entity)
+    return {"ok": True, "data": resolve_entity(entity)}
 
 # ============================================================
 # Trust
@@ -206,13 +164,20 @@ def read_all_trust(x_intent: Optional[str] = Header(None)):
     require_intent(INTENT_READ, x_intent)
     return {"ok": True, "data": get_all_trust()}
 
+
 @app.get("/trust/{agent}")
 def read_agent_trust(agent: str, x_intent: Optional[str] = Header(None)):
     require_intent(INTENT_READ, x_intent)
-    return {"ok": True, "data": {"agent": agent, "trust": get_trust(agent)}}
+    return {
+        "ok": True,
+        "data": {
+            "agent": agent,
+            "trust": get_trust(agent),
+        },
+    }
 
 # ============================================================
-# Trust Events
+# Trust Events (frontend paged)
 # ============================================================
 
 @app.get("/trust/events")
@@ -288,34 +253,34 @@ def trust_timeline(agent: str, x_intent: Optional[str] = Header(None)):
             "trust": round(current, 4),
         })
 
-    return {"agent": agent, "timeline": timeline}
+    return {"ok": True, "data": timeline}
 
 # ============================================================
-# Kernel Adapter
+# Kernel Route (NO MORE 422)
 # ============================================================
 
 @app.post("/kernel/route")
-def kernel_route(payload: dict):
+def kernel_route(
+    request: KernelRouteRequest,
+    x_intent: Optional[str] = Header(None),
+):
 
-    adapter_id = payload.get("adapter_id")
-    content = payload.get("content")
-
-    if not adapter_id or not content:
-        raise HTTPException(status_code=400, detail="adapter_id and content required")
+    require_intent(INTENT_WRITE, x_intent)
 
     msg = KernelMessage(
         source="api",
         type="thought",
-        content=content,
+        content=request.content,
         confidence=0.9,
     )
 
-    routed = kernel_instance.route(adapter_id, msg.to_dict())
+    routed = kernel_instance.route(request.adapter_id, msg.to_dict())
 
-    returned_agent = routed.get("agent") or adapter_id
+    returned_agent = routed.get("agent") or request.adapter_id
     adapter_content = routed.get("reply") or routed.get("content") or ""
     adapter_confidence = float(routed.get("confidence", 0.0) or 0.0)
 
+    # auto claim
     add_claim(
         agent=returned_agent,
         entity="adapter_response",
@@ -324,6 +289,7 @@ def kernel_route(payload: dict):
         identity_id="system",
         signature_verified=True,
     )
+
     reward_agent(returned_agent, adapter_confidence, reason="adapter_route_claim")
 
     if adapter_confidence < 0.5:
@@ -341,6 +307,10 @@ def kernel_route(payload: dict):
 
     return {"ok": True, "data": routed}
 
+# ============================================================
+# Adapters
+# ============================================================
+
 @app.get("/kernel/adapters")
 def kernel_adapters(x_intent: Optional[str] = Header(None)):
 
@@ -350,20 +320,18 @@ def kernel_adapters(x_intent: Optional[str] = Header(None)):
 
     for adapter_id in kernel_instance.registry.list():
         adapter = kernel_instance.registry.get(adapter_id)
-        if not adapter:
-            continue
 
         items.append({
             "adapter_id": adapter_id,
             "adapter_type": getattr(adapter, "adapter_type", "unknown"),
-            "capabilities": adapter.capabilities(),
             "health": adapter.health(),
+            "capabilities": adapter.capabilities(),
         })
 
     return {"ok": True, "data": items if items else []}
 
 # ============================================================
-# Audit Error Reviews
+# Audit
 # ============================================================
 
 @app.get("/audit/error-reviews")

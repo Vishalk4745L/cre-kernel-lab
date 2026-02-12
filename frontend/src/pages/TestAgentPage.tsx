@@ -1,25 +1,29 @@
-import { type FormEvent, useState } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
-import { routeKernelMessage } from '../api/kernelApi';
-import type { KernelRouteResponse } from '../types/api';
+import { runKernelRoute } from '../api/kernelApi';
 
 export function TestAgentPage() {
   const [adapterId, setAdapterId] = useState('mock-agent');
-  const [content, setContent] = useState('Hello from CRE UI control panel');
-  const [response, setResponse] = useState<KernelRouteResponse | null>(null);
+  const [message, setMessage] = useState('Hello from CRE UI control panel');
+  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  const handleRun = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
     try {
-      setError(null);
-      const data = await routeKernelMessage({ adapter_id: adapterId, content });
-      setResponse(data);
+      const data = await runKernelRoute(adapterId, message);
+      setResult(data);
     } catch (err) {
-      setResponse(null);
-      setError((err as Error).message);
+      console.error('Kernel route failed:', err);
+      setError('Kernel route failed');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <section>
@@ -27,35 +31,57 @@ export function TestAgentPage() {
         title="Test Agent View"
         description="Simulate kernel-to-adapter routing and inspect adapter response quality and ownership."
       />
-      <form className="panel" onSubmit={onSubmit}>
-        <label htmlFor="adapterId">Adapter ID</label>
-        <input id="adapterId" value={adapterId} onChange={(e) => setAdapterId(e.target.value)} />
 
-        <label htmlFor="content">Message</label>
-        <textarea id="content" rows={4} value={content} onChange={(e) => setContent(e.target.value)} />
+      <div className="panel">
+        <div className="inline-form">
+          <label>Adapter ID</label>
+          <input
+            value={adapterId}
+            onChange={(e) => setAdapterId(e.target.value)}
+          />
 
-        <button type="submit">Run Kernel Route</button>
-      </form>
+          <label>Message</label>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
 
-      {error && <p className="error">{error}</p>}
-
-      {response && (
-        <div className="panel">
-          <h3>Adapter Response</h3>
-          <p>
-            <strong>Adapter:</strong> {response.agent}
-          </p>
-          <p>
-            <strong>Reply:</strong> {response.reply}
-          </p>
-          <p>
-            <strong>Confidence:</strong> {response.confidence.toFixed(3)}
-          </p>
-          <p>
-            <strong>Status:</strong> {response.status}
-          </p>
+          <button onClick={handleRun} disabled={loading}>
+            {loading ? 'Running...' : 'Run Kernel Route'}
+          </button>
         </div>
-      )}
+      </div>
+
+      <div className="panel">
+        <h3>Result</h3>
+
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+
+        {!result ? (
+          <p>No result yet.</p>
+        ) : (
+          <table>
+            <tbody>
+              <tr>
+                <td><strong>Agent</strong></td>
+                <td>{result.agent ?? adapterId}</td>
+              </tr>
+              <tr>
+                <td><strong>Reply</strong></td>
+                <td>{result.reply ?? result.content ?? 'N/A'}</td>
+              </tr>
+              <tr>
+                <td><strong>Confidence</strong></td>
+                <td>
+                  {result.confidence !== undefined
+                    ? Number(result.confidence).toFixed(3)
+                    : '0.000'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }

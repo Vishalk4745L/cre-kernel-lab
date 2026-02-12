@@ -4,66 +4,136 @@ import type {
   ErrorReview,
   KernelExtendedStatus,
   KernelRootStatus,
-  KernelRouteRequest,
   KernelRouteResponse,
   PagedResponse,
   ResolverResponse,
   TrustEvent,
   TrustMap,
-  TrustTimelineResponse,
 } from '../types/api';
 
-export async function getRootStatus() {
-  const { data } = await apiClient.get<KernelRootStatus>('/');
-  return data;
+/* ===========================
+   ROOT + STATUS
+=========================== */
+
+export async function getRootStatus(): Promise<KernelRootStatus> {
+  const res = await apiClient.get<{ ok: boolean; data: KernelRootStatus }>('/');
+  return res.data?.data ?? {};
 }
 
-export async function getKernelStatus() {
-  const { data } = await apiClient.get<KernelExtendedStatus>('/kernel/status');
-  return data;
+export async function getKernelStatus(): Promise<KernelExtendedStatus> {
+  const res = await apiClient.get<{ ok: boolean; data: KernelExtendedStatus }>(
+    '/kernel/status'
+  );
+  return res.data?.data ?? {};
 }
 
-export async function getTrustScores() {
-  const { data } = await apiClient.get<TrustMap>('/trust');
-  return data;
+/* ===========================
+   TRUST
+=========================== */
+
+export async function getTrustScores(): Promise<TrustMap> {
+  const res = await apiClient.get<{ ok: boolean; data: TrustMap }>('/trust');
+  return res.data?.data ?? {};
 }
 
 export async function getTrustEvents(limit = 25, offset = 0) {
-  const { data } = await apiClient.get<PagedResponse<TrustEvent>>('/trust/events', {
+  const res = await apiClient.get<{
+    ok: boolean;
+    data: PagedResponse<TrustEvent>;
+  }>('/trust/events', {
     params: { limit, offset },
   });
-  return data;
+
+  return res.data?.data ?? {
+    items: [],
+    total: 0,
+    limit,
+    offset,
+  };
 }
 
 export async function getTrustTimeline(agent: string) {
-  const { data } = await apiClient.get<TrustTimelineResponse>('/trust/timeline', {
+  const res = await apiClient.get<{
+    ok: boolean;
+    data: { timestamp: number; trust: number }[];
+  }>('/trust/timeline', {
     params: { agent },
   });
-  return data;
+
+  return res.data?.data ?? [];
 }
 
-export async function resolveEntity(entity: string) {
-  const { data } = await apiClient.get<ResolverResponse>(`/resolve/${encodeURIComponent(entity)}`);
-  return data;
+/* ===========================
+   RESOLVER
+=========================== */
+
+export async function resolveEntity(entity: string): Promise<ResolverResponse> {
+  const res = await apiClient.get<{ ok: boolean; data: ResolverResponse }>(
+    `/resolve/${encodeURIComponent(entity)}`
+  );
+
+  return res.data?.data ?? {};
 }
 
-export async function routeKernelMessage(payload: KernelRouteRequest) {
-  const { data } = await apiClient.post<KernelRouteResponse>('/kernel/route', payload, {
-    headers: {
-      'X-Intent': 'WRITE',
+/* ===========================
+   KERNEL ROUTE (FIXED)
+=========================== */
+
+export async function runKernelRoute(
+  adapterId: string,
+  message: string
+): Promise<KernelRouteResponse> {
+  const res = await apiClient.post<{
+    ok: boolean;
+    data: KernelRouteResponse;
+  }>(
+    '/kernel/route',
+    {
+      adapter_id: adapterId,
+      content: message,
     },
-  });
-  return data;
+    {
+      headers: {
+        'X-Intent': 'WRITE',
+      },
+    }
+  );
+
+  return res.data?.data ?? {};
 }
+
+/* backward alias */
+export const routeKernelMessage = runKernelRoute;
+
+/* ===========================
+   AUDIT
+=========================== */
 
 export async function getErrorReviews(limit = 25, offset = 0) {
-  const { data } = await apiClient.get<PagedResponse<ErrorReview>>('/audit/error-reviews', {
+  const res = await apiClient.get<{
+    ok: boolean;
+    data: PagedResponse<ErrorReview>;
+  }>('/audit/error-reviews', {
     params: { limit, offset },
   });
-  return data;
+
+  return res.data?.data ?? {
+    items: [],
+    total: 0,
+    limit,
+    offset,
+  };
 }
 
-export async function getAdapters() {
-  const { data } = await apiClient.get<AdapterDescriptor[]>('/kernel/adapters');
-  return data;
+/* ===========================
+   ADAPTERS
+=========================== */
+
+export async function getAdapters(): Promise<AdapterDescriptor[]> {
+  const res = await apiClient.get<{
+    ok: boolean;
+    data: AdapterDescriptor[];
+  }>('/kernel/adapters');
+
+  return res.data?.data ?? [];
 }
