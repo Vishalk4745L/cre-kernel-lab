@@ -1,24 +1,9 @@
-"""
-v0.11 – Trust System (JSON-backed, STABLE)
+"""SQLite-backed trust system with trust event logging."""
 
-Responsibilities:
-- Maintain agent trust scores in JSON
-- Reward / penalize agents based on outcomes
-- Persist trust across restarts
-- Expose trust for ledger and API usage
-"""
-
-import json
-import os
+import time
 from typing import Dict, Optional
 
-# =================================================
-# File paths
-# =================================================
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-TRUST_FILE = os.path.join(DATA_DIR, "trust.json")
+from kernel.core.memory_db import db_get_all_trust, db_get_trust, db_set_trust, get_connection
 
 # =================================================
 # Trust Configuration
@@ -35,28 +20,18 @@ BASE_PENALTY = 0.05
 # Internal helpers
 # =================================================
 
-def _ensure_store() -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(TRUST_FILE):
-        with open(TRUST_FILE, "w", encoding="utf-8") as f:
-            json.dump({}, f)
-
-
-def _load_trust() -> Dict[str, float]:
-    _ensure_store()
-    try:
-        with open(TRUST_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return {k: float(v) for k, v in data.items()}
-    except Exception:
-        pass
-    return {}
-
-
-def _save_trust(data: Dict[str, float]) -> None:
-    with open(TRUST_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+def _log_trust_event(agent: str, change: float, reason: str, confidence: float) -> None:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO trust_events (agent, change, reason, confidence, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (agent, float(change), reason, float(confidence), time.time()),
+    )
+    conn.commit()
+    conn.close()
 
 
 # =================================================
@@ -64,44 +39,40 @@ def _save_trust(data: Dict[str, float]) -> None:
 # =================================================
 
 def get_trust(agent: str) -> float:
-    trust = _load_trust()
-    return float(trust.get(agent, DEFAULT_TRUST))
+    trust = db_get_trust(agent)
+    return float(trust if trust is not None else DEFAULT_TRUST)
 
 
 def get_all_trust() -> Dict[str, float]:
-    return _load_trust()
+    return db_get_all_trust()
 
 
 # =================================================
 # Learning Rules (WRITE)
 # =================================================
 
-def reward_agent(agent: str, confidence: Optional[float] = None) -> None:
-    trust = _load_trust()
-
-    old = trust.get(agent, DEFAULT_TRUST)
+def reward_agent(agent: str, confidence: Optional[float] = None, reason: str = "reward") -> None:
+    old = get_trust(agent)
     conf = confidence if confidence is not None else 1.0
     conf = max(0.0, min(conf, 1.0))
 
     delta = BASE_REWARD * conf
     new = min(old + delta, TRUST_CEILING)
+    rounded_new = round(new, 4)
+    db_set_trust(agent, rounded_new)
+    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf)
 
-    trust[agent] = round(new, 4)
-    _save_trust(trust)
 
-
-def penalize_agent(agent: str, confidence: Optional[float] = None) -> None:
-    trust = _load_trust()
-
-    old = trust.get(agent, DEFAULT_TRUST)
+def penalize_agent(agent: str, confidence: Optional[float] = None, reason: str = "penalty") -> None:
+    old = get_trust(agent)
     conf = confidence if confidence is not None else 1.0
     conf = max(0.0, min(conf, 1.0))
 
     delta = BASE_PENALTY * conf
     new = max(old - delta, TRUST_FLOOR)
-
-    trust[agent] = round(new, 4)
-    _save_trust(trust)
+    rounded_new = round(new, 4)
+    db_set_trust(agent, rounded_new)
+    _log_trust_event(agent=agent, change=round(rounded_new - old, 4), reason=reason, confidence=conf)
 
 
 # =================================================
@@ -117,9 +88,9 @@ def update_trust(
     Backward-compatible API for ledger (v0.9 / v0.10).
     """
     if correct:
-        reward_agent(agent, confidence)
+        reward_agent(agent, confidence, reason="consensus_correct")
     else:
-        penalize_agent(agent, confidence)
+        penalize_agent(agent, confidence, reason="consensus_incorrect")
 
 
 # =================================================

@@ -71,6 +71,50 @@ def add_error_review(
     conn.close()
 
 
+def record_error_review(
+    reviewer_agent: str,
+    target_agent: str,
+    entity: str,
+    observed_value: str,
+    expected_value: str,
+    error_type: str,
+    confidence: float,
+    evidence: Optional[str] = None,
+    timestamp: Optional[float] = None,
+) -> None:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO error_reviews (
+            reviewer_agent,
+            target_agent,
+            entity,
+            observed_value,
+            expected_value,
+            error_type,
+            confidence,
+            evidence,
+            timestamp
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            reviewer_agent,
+            target_agent,
+            entity,
+            observed_value,
+            expected_value,
+            error_type,
+            float(confidence),
+            evidence,
+            float(timestamp if timestamp is not None else time.time()),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
 # =================================================
 # Helper – Fetch reviews for an entity
 # =================================================
