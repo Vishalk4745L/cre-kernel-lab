@@ -35,18 +35,12 @@ from kernel.core.memory_db import get_connection
 
 kernel_instance = Kernel()
 
-# Always register mock-agent (required for CI + tests)
+# ✅ Always register mock-agent for tests & CI
 try:
     kernel_instance.register_adapter(MockAgentAdapter())
 except Exception:
+    # Ignore if already registered
     pass
-
-# Ensure mock-agent always exists (for CI + tests)
-try:
-    if not kernel_instance.registry.get("mock-agent"):
-        kernel_instance.register_adapter(MockAgentAdapter())
-except Exception:
-    kernel_instance.register_adapter(MockAgentAdapter())
 
 
 # ============================================================
@@ -63,9 +57,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-INTENT_READ = "READ"
-INTENT_WRITE = "WRITE"
-
 trust_decay_lock = asyncio.Lock()
 
 
@@ -78,19 +69,8 @@ class KernelRouteRequest(BaseModel):
     content: str
 
 
-class AdapterRegisterRequest(BaseModel):
-    adapter_id: str
-    adapter_type: str = "agent"
-
-
-class GenericDbAdapter(MockAgentAdapter):
-    def __init__(self, adapter_id: str, adapter_type: str) -> None:
-        self.adapter_id = adapter_id
-        self.adapter_type = adapter_type
-
-
 # ============================================================
-# Trust WebSocket Manager
+# WebSocket Manager
 # ============================================================
 
 class TrustSocketManager:
@@ -119,7 +99,7 @@ trust_socket_manager = TrustSocketManager()
 
 
 # ============================================================
-# Logging
+# Logging Setup
 # ============================================================
 
 def _ensure_logs_dir() -> Path:
@@ -150,7 +130,7 @@ request_logger, request_logger_listener = _configure_request_logger()
 
 
 # ============================================================
-# API Key
+# API Key Guard
 # ============================================================
 
 def require_write_api_key(x_api_key: Optional[str] = Header(None)) -> None:
@@ -195,25 +175,23 @@ async def shutdown() -> None:
 # ============================================================
 
 @app.get("/")
-def root_status(x_intent: Optional[str] = Header(None)):
-    return {"ok": True, "data": {"status": "CRE kernel alive", "intent": x_intent or INTENT_READ}}
+def root_status():
+    return {"ok": True, "status": "CRE kernel alive"}
 
 
 @app.get("/kernel/status")
-def kernel_status(x_intent: Optional[str] = Header(None)):
+def kernel_status():
     adapters = kernel_instance.registry.list()
     return {
         "ok": True,
-        "data": {
-            "version": app.version,
-            "adapters_registered": len(adapters),
-            "timestamp": time.time(),
-        },
+        "version": app.version,
+        "adapters_registered": len(adapters),
+        "timestamp": time.time(),
     }
 
 
 # ============================================================
-# Trust
+# Trust Endpoints
 # ============================================================
 
 @app.get("/trust")
