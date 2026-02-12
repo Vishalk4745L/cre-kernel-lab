@@ -17,6 +17,7 @@ from typing import Dict, Optional
 # =================================================
 
 DB_PATH = Path("data/cre_memory.db")
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 # =================================================
@@ -43,9 +44,6 @@ def init_db() -> None:
     conn = get_connection()
     cur = conn.cursor()
 
-    # ------------------------------
-    # Trust table
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS trust (
         agent TEXT PRIMARY KEY,
@@ -54,9 +52,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Trust events (explainability)
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS trust_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,9 +63,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Claims
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS claims (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,9 +75,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Resolutions
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS resolutions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,9 +86,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Error reviews (Agent → Agent)
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS error_reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,9 +107,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Error resolutions (consensus)
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS error_resolutions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,9 +126,6 @@ def init_db() -> None:
     )
     """)
 
-    # ------------------------------
-    # Error penalty events (audit)
-    # ------------------------------
     cur.execute("""
     CREATE TABLE IF NOT EXISTS error_penalty_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,11 +140,29 @@ def init_db() -> None:
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS api_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      method TEXT,
+      path TEXT,
+      status INTEGER,
+      duration REAL,
+      timestamp REAL
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS adapters (
+      adapter_id TEXT PRIMARY KEY,
+      adapter_type TEXT,
+      created_at REAL
+    )
+    """)
+
     conn.commit()
     conn.close()
 
 
-# 🔥 IMPORTANT: initialize DB on import
 init_db()
 
 

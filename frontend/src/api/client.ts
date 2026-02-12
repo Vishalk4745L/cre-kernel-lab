@@ -9,3 +9,12 @@ export const apiClient = axios.create({
     'X-Intent': readIntent,
   },
 });
+
+export function writeHeaders() {
+  const headers: Record<string, string> = { 'X-Intent': 'WRITE' };
+  const apiKey = import.meta.env.VITE_KERNEL_API_KEY;
+  if (apiKey) {
+    headers['X-API-KEY'] = apiKey;
+  }
+  return headers;
+}

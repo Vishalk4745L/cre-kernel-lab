@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { runKernelRoute } from '../api/kernelApi';
+import { useToast } from '../components/ToastProvider';
 
 export function TestAgentPage() {
   const [adapterId, setAdapterId] = useState('mock-agent');
@@ -8,6 +9,7 @@ export function TestAgentPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { pushError } = useToast();
 
   const handleRun = async () => {
     setLoading(true);
@@ -20,6 +22,7 @@ export function TestAgentPage() {
     } catch (err) {
       console.error('Kernel route failed:', err);
       setError('Kernel route failed');
+      pushError('Kernel route failed');
     } finally {
       setLoading(false);
     }
